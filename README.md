@@ -1,3 +1,56 @@
+# y combinator: 不引用自己也能实现递归？
+
+### 问题
+递归函数，比如求阶乘: 
+`f = ->(n){ n==0? 1 : n*f[n-1] }`
+这里右边引用了f，可以不引用自身实现递归么？
+
+### show me the money
+答案如下:
+```ruby
+# proc[x] === proc.call(x)
+y = ->(f){->(x){x[x]}[->(x){f[->(g){x[x][g]}]}]}    
+_fact = ->(f){->(n){n==0?1:n*f[n-1]} }
+fact = y[_fact]
+puts (1..10).map(&fact)
+```
+
+### 分析
+以上的关键在于神奇y函数，它是啥？
+
+首先，对于任何一个引用自己的递归函数r，我们都能写出一个不引用自己的almost版本函数：
+例如: 
+```
+r = (*args) -> {...r...}
+almost_r = (f)->(*args)->{...f...}
+```
+然后会发现: almost_r(r) === r
+r是almost_r的不动点
+而y函数叫做y combinator，它能够对于一个给定函数，求出它的不动点。
+因此y(almost_r) == r, 这里y和almost_r都不引用自身。
+
+所以，对于任何一个递归函数r，我们都能把它写成y(almost_r)的形式，一个没有自我引用的形式。（y是已知的，almost_r是从r推导的，也是已知的）
+
+### Y combinator （Y不动点组合子）
+y函数是怎么得到的?
+```
+        r:=real, a:=almost, p:=part
+        假设:
+            r = (arg)->...r...
+            a = (f)->(arg)->...f...
+            p = (f)->(arg)->...ff...
+            y = (a)->r
+            (a(r) == r)
+            这里只有r引用了自己，a和p都没有引用自己
+        于是:
+            p == (f)->a(ff) 
+            所以, pp = a(pp) = (arg)-> ...pp... 
+            所以，pp == r
+            所以, y(a) = r = pp = ((x)->xx)p = ((x)->xx)((f)->a(ff))
+            y = (a)->((x)->xx)((f)->a(ff)) = (a)->((x)->xx)((f)->a((g)->(ff)g))
+
+```
+大概就是这样吧，哦吼吼吼，请不要太在意细节...
 
 # Ruby tips: patch on singleton_class
 
