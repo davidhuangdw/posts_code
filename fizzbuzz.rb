@@ -1,18 +1,15 @@
 class Game
-  attr_accessor :result, :value
   def initialize
     @rules=[]
     yield self if block_given?
   end
 
-  def add_rule(&blk)
-    @rules << blk
-  end
+  def add_rule(&blk); @rules << blk end
 
-  def report(value)
-    reset(value)
+  def report(number)
+    reset
     @rules.each do |rule|
-      @stopped ? break : instance_eval(&rule)
+      @stopped ? break : instance_exec(number, &rule)
     end
     @result
   end
@@ -22,26 +19,18 @@ class Game
     @stopped = true
     @result=word
   end
-  def append(word)
-    @result||=""
-    @result<<word
-  end
-  def default_with(v); @result||=v end
-  def reset(value)
-    @value = value
-    @result = nil
-    @stopped = false
-  end
+  def reset; @result = @stopped = nil end
 end
 
 def create_fizzbuzz
   Game.new do |r|
-    r.add_rule{ stop_with('Fizz') if(value.to_s.include?('3')) }
-    r.add_rule do
-      append('Fizz') if(value%3==0)
-      append('Buzz') if(value%5==0)
-      append('Whizz') if(value%7==0)
-      default_with(value)
+    r.add_rule{|number| stop_with('Fizz') if(number.to_s.include?('3')) }
+    r.add_rule do |number|
+      @result ||= ""
+      @result << 'Fizz' if(number%3==0)
+      @result << 'Buzz' if(number%5==0)
+      @result << 'Whizz' if(number%7==0)
+      @result = number if @result.empty?
     end
   end
 end

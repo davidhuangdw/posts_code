@@ -1,3 +1,101 @@
+# 和小于k的最长连续子串
+
+### 问题
+已知一个长度为n的数组（允许负数）, 和一个整数k, 求：和小于k的最长连续子串？
+
+例如: 
+
+k=184, A=[431, -15, 639, 342, -14, 565, -924, 635, 167, -70], 
+
+和小于184的最长子串为A[3..6]
+
+### 写个简单测试先
+
+```ruby
+require_relative '../longest_subarray_with_sum_less_than_k'
+
+describe LongestSub do
+  let(:array) {[431, -15, 639, 342, -14, 565, -924, 635, 167, -70]}
+  let(:bound) {184}
+  let(:result) {subject.longest(array,bound)}
+  let(:ans) {array[3..6]}
+  it "should compute the longest subarray whose sum <= bound" do
+    expect(result).to eq ans
+  end
+end
+```
+
+### 分析
+如果暴力枚举起点和终点，复杂度为O(n^2)。能不能找到一些规律优化呢？
+
+
+### Make hands dirty
+
+单纯考虑原数组好像找不到规律。
+
+考虑前缀和，此时问题转换为已知pre数组，求pre[j]-pre[i]<=k的距离最大(i,j)对.
+
+由于有负数，pre数组没有递增规律。
+
+第一个元素的右端点，就已经难以确定了，必须从右到左扫描，直到差值<=k，有可能一个都不成功；而且，算好i后，算i＋1时好像还是要扫描所有之后的右端点。
+
+于是考虑对pre排序, 然后可以用“双指针”，不断移动右指针直到>k，并一直保存当前最右下标。这样需要复杂度O(nlogn)排序＋O(n) == O(nlogn)
+
+### Make it better
+
+还有更好的方法吗？有没有什么规律，来排除一些值呢？
+
+可以发现右端点中，如果`j1<j2`而且`pre[j1]>=pre[j2]`，那肯定不会选j1, 因为j2既比j1远，求和时结果又比j1小。所以，可以从右到左扫描一遍，过滤掉不可能的右端点。
+
+而且发现，这样过滤后的右端点在pre上是递增的，就可以用“双指针”求了。
+
+复杂度 = O(n)过滤 + O(n)扫描 ＝ O(n)
+
+代码：
+```ruby
+class LongestSub
+  def longest(arr,bound)
+    reset(arr,bound)
+    l,r = [(0...size),poss_r].map(&:to_enum)
+    loop { update(l,r) }
+    arr[@longest_range]
+  end
+
+  def update(l, r)
+    i,j = [l,r].map(&:peek)
+    if i<=j && presum(j,i)<=bound
+      @longest_range = [@longest_range, (i..j)].max_by(&:size)
+      r.next
+    else
+      l.next
+    end
+  end
+
+private
+  attr_reader :arr, :bound
+  def reset(arr,bound)
+    @arr,@bound=[arr,bound]
+    @poss_r = @pre  = nil
+    @longest_range = (0...0)
+  end
+  def size; arr.size end
+  def pre
+    @pre ||= arr.reduce([0]){|res,v| res << res.last+v}
+  end
+  def presum(j,i=0)
+    pre[j+1] - pre[i]
+  end
+  def poss_r
+    @poss_r ||= (0...size).reverse_each.reduce([]) do |res,i|
+      res.unshift(i) unless res.first && presum(i) >= presum(res.first)
+      res
+    end
+  end
+end
+```
+
+
+
 # y combinator: 不引用自己也能实现递归？
 
 ### 问题
@@ -18,15 +116,18 @@ puts (1..10).map(&fact)
 ### 分析
 以上的关键在于神奇y函数，它是啥？
 
-首先，对于任何一个引用自己的递归函数r，我们都能写出一个不引用自己的almost版本函数：
-例如: 
+首先，对于任何一个引用自己的递归函数r，我们都能写出一个不引用自己的almost版本函数： 
 ```
 r = (*args) -> {...r...}
 almost_r = (f)->(*args)->{...f...}
 ```
-然后会发现: almost_r(r) === r
+
+然后会发现: `almost_r(r) === r`
+
 r是almost_r的不动点
+
 而y函数叫做y combinator，它能够对于一个给定函数，求出它的不动点。
+
 因此y(almost_r) == r, 这里y和almost_r都不引用自身。
 
 所以，对于任何一个递归函数r，我们都能把它写成y(almost_r)的形式，一个没有自我引用的形式。（y是已知的，almost_r是从r推导的，也是已知的）
@@ -133,29 +234,29 @@ end
 
 ### 分析
 这个问题感觉是考察如何decouple和代码可读性。
+
 为了允许用户增加和改变规则, 于是很直观地想到了这样：
+
 ```ruby
 game.add_rule {..specifications..}
 game.add_rule {..specifications..}
 game.report(number)
 ```
+
 扩充：
 ```ruby
 class Game
-  attr_accessor :result, :value
   def initialize
     @rules=[]
     yield self if block_given?
   end
 
-  def add_rule(&blk)
-    @rules << blk
-  end
+  def add_rule(&blk); @rules << blk end
 
-  def report(value)
-    reset(value)
+  def report(number)
+    reset
     @rules.each do |rule|
-      @stopped ? break : instance_eval(&rule)
+      @stopped ? break : instance_exec(number, &rule)
     end
     @result
   end
@@ -165,26 +266,18 @@ class Game
     @stopped = true
     @result=word
   end
-  def append(word)
-    @result||=""
-    @result<<word
-  end
-  def default_with(v); @result||=v end
-  def reset(value)
-    @value = value
-    @result = nil
-    @stopped = false
-  end
+  def reset; @result = @stopped = nil end
 end
 
 def create_fizzbuzz
   Game.new do |r|
-    r.add_rule{ stop_with('Fizz') if(value.to_s.include?('3')) }
-    r.add_rule do
-      append('Fizz') if(value%3==0)
-      append('Buzz') if(value%5==0)
-      append('Whizz') if(value%7==0)
-      default_with(value)
+    r.add_rule{|number| stop_with('Fizz') if(number.to_s.include?('3')) }
+    r.add_rule do |number|
+      @result ||= ""
+      @result << 'Fizz' if(number%3==0)
+      @result << 'Buzz' if(number%5==0)
+      @result << 'Whizz' if(number%7==0)
+      @result = number if @result.empty?
     end
   end
 end
