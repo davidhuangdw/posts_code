@@ -1,3 +1,80 @@
+# What could be dynamic in a block(proc) ?
+
+#### Test
+```ruby
+def laugh
+  "main haha"
+end
+def foo
+  "main's foo method"
+end
+/main_match/.match 'main_match...'
+foo = "main's foo"
+
+blk = proc do
+  puts foo, @msg, $&, laugh, '-'*10
+end
+
+class Bar
+  def laugh
+    "bar haha"
+  end
+  def foo
+    "bar's foo method"
+  end
+  def run(&blk)
+    /bar_match/.match 'bar_match...'
+    foo = "bar's foo variable"
+    @msg = "bar's msg"
+
+    puts '='*10 + 'call blk in bar:'
+    blk[]
+
+    puts '='*10 + 'instance_eval blk in bar:'
+    instance_eval(&blk)
+
+    puts $&
+  end
+end
+
+@msg = "main's msg"
+bar = Bar.new
+bar.run(&blk)
+
+puts $&
+```
+
+#### Output
+
+```
+==========call blk in bar:
+main's foo
+main's msg
+main_match
+main haha
+----------
+==========instance_eval blk in bar:
+main's foo
+bar's msg
+main_match
+bar haha
+----------
+bar_match
+main_match
+```
+
+### Conclusions:
+* token parse order:
+    1. as variable from ancestor env, if exist
+    2. as variable of current env, if exist
+    3. as method of 'self', if exist
+* dynamic part:
+    * lexical_scope/env chain won't change: variables are bound to lexical_scope_chain forever
+    * only 'self' changeable
+* so, if we want pass dynamic data to block, we have to introduce them:
+    1. as method/message(by change 'self')
+    2. as args(`instance_exec` if both)
+
 # 和小于k的最长连续子串
 
 ### 问题
