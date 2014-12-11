@@ -1,3 +1,112 @@
+# Implement lazy enumerator in ruby
+
+### How
+* we can make a monad,
+  * it stores:
+    1. original_collection
+    2. transformation proc
+  * every time(map, select, reject, drop):
+    * create a new monad, with:
+      1. the same original_collection
+      2. adjusted transformation proc
+
+### Test
+```ruby
+shared_examples_for 'lazy' do
+  it "should make lazy enumeration" do
+    expect(take_first_three_odd).to eq first_three_odd
+  end
+end
+
+describe Lazy do
+  let(:inf) { (1...Float::INFINITY) }
+
+  let(:lazy_list) {inf.my_lazy.map{|i| i*i}}
+  let(:take_first_three_odd) {lazy_list.select(&:odd?).take(3)}
+  let(:first_three_odd) {[1,9,25]}
+
+  context 'when infinite list' do
+    it_behaves_like 'lazy'
+  end
+
+  context 'when drop a few' do
+    let(:take_first_three_odd) {lazy_list.reject(&:even?).drop(2).take(3)}
+    let(:first_three_odd) {[25,49,81]}
+    it_behaves_like 'lazy'
+  end
+
+  context 'when drop more than once' do
+    let(:take_first_three_odd) {lazy_list.reject(&:even?).drop(1).drop(2).first(3)}
+    let(:first_three_odd) {[49,81,121]}
+    it_behaves_like 'lazy'
+  end
+
+  context 'when have nil' do
+    let(:take_first_three_odd) {lazy_list.reject(&:even?).map{nil}.drop(2).first(3)}
+    let(:first_three_odd) {[nil,nil,nil]}
+    it_behaves_like 'lazy'
+  end
+end
+```
+
+### Code
+
+```ruby
+class Lazy
+  def initialize(coll, &trans)
+    @coll = coll
+    @trans = trans || proc{|c,&b| c.each(&b)}
+  end
+  def my_lazy; self end
+
+  def map(&blk)
+    create do |c,&b|
+      @trans.call(c){|e| b[blk[e]]}
+    end
+  end
+
+  def select(&blk)
+    create do |c,&b|
+      @trans.call(c){|e| b[e] if blk[e]}
+    end
+  end
+
+  def reject(&blk)
+    select{|e| !blk[e]}
+  end
+
+  def drop(n)
+    count = 0
+    create do |c, &b|
+      @trans.call(c) do |e|
+        b[e] unless count<n
+        count+=1
+      end
+    end
+  end
+
+  def take(n)
+    res= []
+    @trans.call(@coll) do |e|
+      res.size<n ? res<<e : (return res)
+    end
+    res
+  end
+
+  alias_method :first, :take
+
+  private
+  def create(&blk)
+    self.class.new(@coll,&blk)
+  end
+end
+
+module Enumerable
+  def my_lazy; Lazy.new(self) end
+end
+```
+
+
 # What could be dynamic in a block(proc) ?
 
 #### Test

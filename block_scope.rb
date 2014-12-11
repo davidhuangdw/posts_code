@@ -38,3 +38,4 @@ bar = Bar.new
 bar.run(&blk)
 
 puts $&
+
